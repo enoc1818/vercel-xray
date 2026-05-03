@@ -1,62 +1,24 @@
 export const config = { runtime: "edge" };
 
-const TARGET_BASE = (process.env.TARGET_DOMAIN || "").replace(/\/$/, "");
-
-const STRIP_HEADERS = new Set([
-  "host",
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-  "forwarded",
-  "x-forwarded-host",
-  "x-forwarded-proto",
-  "x-forwarded-port",
-]);
-
 export default async function handler(req) {
-  if (!TARGET_BASE) {
-    return new Response("Misconfigured: TARGET_DOMAIN is not set", { status: 500 });
-  }
+    const target = process.env.TARGET_DOMAIN || "";
+    if (!target) return new Response("Variável TARGET_DOMAIN não encontrada", { status: 500 });
 
-  try {
-    const pathStart = req.url.indexOf("/", 8);
-    const targetUrl =
-      pathStart === -1 ? TARGET_BASE + "/" : TARGET_BASE + req.url.slice(pathStart);
+    try {
+        const url = new URL(req.url);
+        const proxyUrl = target.endsWith('/') ? target.slice(0, -1) : target;
+        const finalUrl = proxyUrl + url.pathname + url.search;
 
-    const out = new Headers();
-    let clientIp = null;
-    for (const [k, v] of req.headers) {
-      if (STRIP_HEADERS.has(k)) continue;
-      if (k.startsWith("x-vercel-")) continue;
-      if (k === "x-real-ip") {
-        clientIp = v;
-        continue;
-      }
-      if (k === "x-forwarded-for") {
-        if (!clientIp) clientIp = v;
-        continue;
-      }
-      out.set(k, v);
+        const headers = new Headers(req.headers);
+        headers.set("host", new URL(proxyUrl).host);
+
+        return await fetch(finalUrl, {
+            method: req.method,
+            headers: headers,
+            body: req.body,
+            redirect: "manual",
+        });
+    } catch (e) {
+        return new Response("Erro de Conexão: " + e.message, { status: 502 });
     }
-    if (clientIp) out.set("x-forwarded-for", clientIp);
-
-    const method = req.method;
-    const hasBody = method !== "GET" && method !== "HEAD";
-
-    return await fetch(targetUrl, {
-      method,
-      headers: out,
-      body: hasBody ? req.body : undefined,
-      duplex: "half",
-      redirect: "manual",
-    });
-  } catch (err) {
-    console.error("relay error:", err);
-    return new Response("Bad Gateway: Tunnel Failed", { status: 502 });
-  }
 }
