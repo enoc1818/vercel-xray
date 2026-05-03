@@ -1,16 +1,16 @@
 const https = require('https');
 
-export default function handler(req, res) {
-    const ip = process.env.TARGET_DOMAIN; // Apenas o IP: 209.14.84.172
+module.exports = (req, res) => {
+    const targetIp = process.env.TARGET_DOMAIN; // Ex: 209.14.84.172
     const path = "/fogueteak";
 
     const options = {
-        hostname: ip,
+        hostname: targetIp,
         port: 443,
         path: path,
         method: req.method,
         headers: req.headers,
-        rejectUnauthorized: false // ISSO AQUI ignora o erro de SSL e o "Internal Error"
+        rejectUnauthorized: false // IGNORA ERRO DE SSL
     };
 
     const proxyReq = https.request(options, (proxyRes) => {
@@ -19,8 +19,9 @@ export default function handler(req, res) {
     });
 
     proxyReq.on('error', (err) => {
-        res.status(502).send("Erro de Conexão VPS: " + err.message);
+        res.status(502).setHeader('Content-Type', 'text/plain');
+        res.end("Erro na VPS: " + err.message);
     });
 
     req.pipe(proxyReq);
-}
+};
