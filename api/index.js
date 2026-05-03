@@ -4,10 +4,11 @@ export default async function handler(req) {
     const domain = process.env.TARGET_DOMAIN || "";
     
     try {
-        // MUDAMOS PARA HTTPS AQUI EMBAIXO:
+        // Usamos HTTPS mas com o Host configurado para o domínio que o SSL espera
         const finalUrl = `https://${domain}:443/fogueteak`;
 
         const headers = new Headers(req.headers);
+        // O Host deve ser o domínio do nip.io para bater com o certificado
         headers.set("host", domain); 
 
         return await fetch(finalUrl, {
@@ -15,8 +16,11 @@ export default async function handler(req) {
             headers: headers,
             body: req.body,
             redirect: "manual",
+            // Tenta forçar a conexão mesmo com certificados simples
+            next: { revalidate: 0 } 
         });
     } catch (e) {
-        return new Response("Erro no Script: " + e.message, { status: 502 });
+        // Se der erro, ele vai te mostrar o motivo real agora
+        return new Response("Motivo do Erro: " + e.message, { status: 502 });
     }
 }
