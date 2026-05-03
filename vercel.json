@@ -2,7 +2,7 @@
   "routes": [
     {
       "src": "/(.*)",
-      "dest": "/api_ok/index.js"
+      "dest": "/api/index.js"
     }
   ]
 }
