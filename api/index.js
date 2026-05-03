@@ -29,6 +29,10 @@ export default async function handler(req) {
       pathStart === -1 ? TARGET_BASE + "/" : TARGET_BASE + req.url.slice(pathStart);
 
     const out = new Headers();
+    
+    // CORREÇÃO: Extrai o host da URL de destino para não ir vazio
+    const targetHost = new URL(TARGET_BASE).host;
+
     let clientIp = null;
     for (const [k, v] of req.headers) {
       if (STRIP_HEADERS.has(k)) continue;
@@ -43,7 +47,11 @@ export default async function handler(req) {
       }
       out.set(k, v);
     }
+    
     if (clientIp) out.set("x-forwarded-for", clientIp);
+    
+    // CORREÇÃO: Força o Host que o Xray espera receber
+    out.set("host", targetHost);
 
     const method = req.method;
     const hasBody = method !== "GET" && method !== "HEAD";
