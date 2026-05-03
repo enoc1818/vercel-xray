@@ -4,8 +4,8 @@ export default async function handler(req) {
     const domain = process.env.TARGET_DOMAIN || "";
     
     try {
-        // Ele monta o link: http + seu IP + porta 443 + seu path
-        const finalUrl = `http://${domain}:443/fogueteak`;
+        // MUDAMOS PARA HTTPS AQUI EMBAIXO:
+        const finalUrl = `https://${domain}:443/fogueteak`;
 
         const headers = new Headers(req.headers);
         headers.set("host", domain); 
