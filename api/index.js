@@ -1,26 +1,23 @@
 export const config = { runtime: "edge" };
 
 export default async function handler(req) {
-  const TARGET = process.env.TARGET_DOMAIN; // Ex: http://209.14.84.172.nip.io:1080/fogueteak
+  const TARGET = process.env.TARGET_DOMAIN; // http://209.14.84.172.nip.io:1080/fogueteak
 
   try {
+    const targetUrl = new URL(TARGET);
     const url = new URL(req.url);
-    const targetUrl = TARGET + url.pathname + url.search;
-
-    const newHeaders = new Headers(req.headers);
     
-    // Extrai o host do alvo para não dar erro de segurança
-    const hostName = new URL(TARGET).host;
-    newHeaders.set("Host", hostName);
+    // Monta a URL final preservando o path e os parâmetros
+    const finalUrl = `${targetUrl.origin}${targetUrl.pathname}${url.search}`;
 
-    return await fetch(targetUrl, {
+    return await fetch(finalUrl, {
       method: req.method,
-      headers: newHeaders,
+      headers: req.headers, // Passa os headers originais sem mexer em nada
       body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
       redirect: "manual",
-      duplex: "half",
     });
   } catch (err) {
+    // Se a rede cair, ele vai avisar aqui
     return new Response("Erro de Conexão: " + err.message, { status: 502 });
   }
 }
