@@ -1,26 +1,17 @@
-export const config = { runtime: "edge" };
+const httpProxy = require('http-proxy');
+const proxy = httpProxy.createProxyServer({
+    changeOrigin: true,
+    secure: false // ISSO AQUI manda o SSL da VPS se ferrar e aceita a conexão
+});
 
-export default async function handler(req) {
-    const domain = process.env.TARGET_DOMAIN || "";
+export default function handler(req, res) {
+    // Pega o IP da sua variável (Ex: 209.14.84.172)
+    const target = process.env.TARGET_DOMAIN;
     
-    try {
-        // Usamos HTTPS mas com o Host configurado para o domínio que o SSL espera
-        const finalUrl = `https://${domain}:443/fogueteak`;
+    // Monta a URL ignorando as chatices da Vercel
+    const finalUrl = `https://${target}:443/fogueteak`;
 
-        const headers = new Headers(req.headers);
-        // O Host deve ser o domínio do nip.io para bater com o certificado
-        headers.set("host", domain); 
-
-        return await fetch(finalUrl, {
-            method: req.method,
-            headers: headers,
-            body: req.body,
-            redirect: "manual",
-            // Tenta forçar a conexão mesmo com certificados simples
-            next: { revalidate: 0 } 
-        });
-    } catch (e) {
-        // Se der erro, ele vai te mostrar o motivo real agora
-        return new Response("Motivo do Erro: " + e.message, { status: 502 });
-    }
+    proxy.web(req, res, { target: finalUrl }, (err) => {
+        res.status(502).send("Erro de Conexão: " + err.message);
+    });
 }
