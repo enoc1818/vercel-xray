@@ -1,17 +1,26 @@
-const httpProxy = require('http-proxy');
-const proxy = httpProxy.createProxyServer({
-    changeOrigin: true,
-    secure: false // ISSO AQUI manda o SSL da VPS se ferrar e aceita a conexão
-});
+const https = require('https');
 
 export default function handler(req, res) {
-    // Pega o IP da sua variável (Ex: 209.14.84.172)
-    const target = process.env.TARGET_DOMAIN;
-    
-    // Monta a URL ignorando as chatices da Vercel
-    const finalUrl = `https://${target}:443/fogueteak`;
+    const ip = process.env.TARGET_DOMAIN; // Apenas o IP: 209.14.84.172
+    const path = "/fogueteak";
 
-    proxy.web(req, res, { target: finalUrl }, (err) => {
-        res.status(502).send("Erro de Conexão: " + err.message);
+    const options = {
+        hostname: ip,
+        port: 443,
+        path: path,
+        method: req.method,
+        headers: req.headers,
+        rejectUnauthorized: false // ISSO AQUI ignora o erro de SSL e o "Internal Error"
+    };
+
+    const proxyReq = https.request(options, (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res);
     });
+
+    proxyReq.on('error', (err) => {
+        res.status(502).send("Erro de Conexão VPS: " + err.message);
+    });
+
+    req.pipe(proxyReq);
 }
