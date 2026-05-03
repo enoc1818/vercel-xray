@@ -1,70 +1,26 @@
 export const config = { runtime: "edge" };
 
-const TARGET_BASE = (process.env.TARGET_DOMAIN || "").replace(/\/$/, "");
-
-const STRIP_HEADERS = new Set([
-  "host",
-  "connection",
-  "keep-alive",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "te",
-  "trailer",
-  "transfer-encoding",
-  "upgrade",
-  "forwarded",
-  "x-forwarded-host",
-  "x-forwarded-proto",
-  "x-forwarded-port",
-]);
-
 export default async function handler(req) {
-  if (!TARGET_BASE) {
-    return new Response("Misconfigured: TARGET_DOMAIN is not set", { status: 500 });
-  }
+  const TARGET = process.env.TARGET_DOMAIN; // Ex: http://209.14.84.172.nip.io:1080/fogueteak
 
   try {
-    const pathStart = req.url.indexOf("/", 8);
-    const targetUrl =
-      pathStart === -1 ? TARGET_BASE + "/" : TARGET_BASE + req.url.slice(pathStart);
+    const url = new URL(req.url);
+    const targetUrl = TARGET + url.pathname + url.search;
 
-    const out = new Headers();
+    const newHeaders = new Headers(req.headers);
     
-    // CORREÇÃO: Extrai o host da URL de destino para não ir vazio
-    const targetHost = new URL(TARGET_BASE).host;
-
-    let clientIp = null;
-    for (const [k, v] of req.headers) {
-      if (STRIP_HEADERS.has(k)) continue;
-      if (k.startsWith("x-vercel-")) continue;
-      if (k === "x-real-ip") {
-        clientIp = v;
-        continue;
-      }
-      if (k === "x-forwarded-for") {
-        if (!clientIp) clientIp = v;
-        continue;
-      }
-      out.set(k, v);
-    }
-    
-    if (clientIp) out.set("x-forwarded-for", clientIp);
-    
-    // CORREÇÃO: Força o Host que o Xray espera receber
-    out.set("host", targetHost);
-
-    const method = req.method;
-    const hasBody = method !== "GET" && method !== "HEAD";
+    // Extrai o host do alvo para não dar erro de segurança
+    const hostName = new URL(TARGET).host;
+    newHeaders.set("Host", hostName);
 
     return await fetch(targetUrl, {
-      method,
-      headers: out,
-      body: hasBody ? req.body : undefined,
-      duplex: "half",
+      method: req.method,
+      headers: newHeaders,
+      body: req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
       redirect: "manual",
+      duplex: "half",
     });
   } catch (err) {
-    console.error("relay error:", err);
-    return new Response("Bad Gateway: Tunnel Failed", { status: 502 });
+    return new Response("Erro de Conexão: " + err.message, { status: 502 });
   }
 }
