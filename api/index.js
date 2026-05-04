@@ -1,7 +1,7 @@
-// REMOVIDO: export const config = { runtime: "edge" };
-// Node.js runtime é o padrão, não precisa declarar
+import https from "https";
 
 const TARGET_BASE = (process.env.TARGET_DOMAIN || "").replace(/\/$/, "");
+const agent = new https.Agent({ rejectUnauthorized: false });
 
 const STRIP_HEADERS = new Set([
   "host", "connection", "keep-alive",
@@ -35,6 +35,7 @@ export default async function handler(req, res) {
       headers: out,
       body: hasBody ? req : undefined,
       redirect: "manual",
+      agent,
     });
 
     res.status(response.status);
