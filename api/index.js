@@ -1,3 +1,5 @@
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 import https from "https";
 import http from "http";
 
@@ -38,7 +40,7 @@ export default async function handler(req, res) {
         path: targetUrl.pathname + targetUrl.search,
         method,
         headers: outHeaders,
-        rejectUnauthorized: false, // ← aceita certificado autoassinado
+        rejectUnauthorized: false,
       }, (proxyRes) => {
         res.status(proxyRes.statusCode);
         for (const [k, v] of Object.entries(proxyRes.headers)) {
