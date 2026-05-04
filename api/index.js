@@ -1,66 +1,62 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
-
-import https from "https";
-import http from "http";
+export const config = { runtime: "edge" };
 
 const TARGET_BASE = (process.env.TARGET_DOMAIN || "").replace(/\/$/, "");
 
 const STRIP_HEADERS = new Set([
-  "host", "connection", "keep-alive",
-  "proxy-authenticate", "proxy-authorization",
-  "te", "trailer", "transfer-encoding", "upgrade",
-  "forwarded", "x-forwarded-host", "x-forwarded-proto",
+  "host",
+  "connection",
+  "keep-alive",
+  "proxy-authenticate",
+  "proxy-authorization",
+  "te",
+  "trailer",
+  "transfer-encoding",
+  "upgrade",
+  "forwarded",
+  "x-forwarded-host",
+  "x-forwarded-proto",
   "x-forwarded-port",
 ]);
 
-export default async function handler(req, res) {
+export default async function handler(req) {
   if (!TARGET_BASE) {
-    return res.status(500).send("Misconfigured: TARGET_DOMAIN is not set");
+    return new Response("Misconfigured: TARGET_DOMAIN is not set", { status: 500 });
   }
 
   try {
-    const url = new URL(req.url, `https://${req.headers.host}`);
-    const targetUrl = new URL(TARGET_BASE + url.pathname + url.search);
+    const pathStart = req.url.indexOf("/", 8);
+    const targetUrl =
+      pathStart === -1 ? TARGET_BASE + "/" : TARGET_BASE + req.url.slice(pathStart);
 
-    const outHeaders = {};
-    for (const [k, v] of Object.entries(req.headers)) {
+    const out = new Headers();
+    let clientIp = null;
+    for (const [k, v] of req.headers) {
       if (STRIP_HEADERS.has(k)) continue;
       if (k.startsWith("x-vercel-")) continue;
-      outHeaders[k] = v;
+      if (k === "x-real-ip") {
+        clientIp = v;
+        continue;
+      }
+      if (k === "x-forwarded-for") {
+        if (!clientIp) clientIp = v;
+        continue;
+      }
+      out.set(k, v);
     }
+    if (clientIp) out.set("x-forwarded-for", clientIp);
 
     const method = req.method;
     const hasBody = method !== "GET" && method !== "HEAD";
-    const lib = targetUrl.protocol === "https:" ? https : http;
 
-    await new Promise((resolve, reject) => {
-      const proxyReq = lib.request({
-        hostname: targetUrl.hostname,
-        port: targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
-        path: targetUrl.pathname + targetUrl.search,
-        method,
-        headers: outHeaders,
-        rejectUnauthorized: false,
-      }, (proxyRes) => {
-        res.status(proxyRes.statusCode);
-        for (const [k, v] of Object.entries(proxyRes.headers)) {
-          res.setHeader(k, v);
-        }
-        proxyRes.pipe(res);
-        proxyRes.on("end", resolve);
-      });
-
-      proxyReq.on("error", reject);
-
-      if (hasBody) {
-        req.pipe(proxyReq);
-      } else {
-        proxyReq.end();
-      }
+    return await fetch(targetUrl, {
+      method,
+      headers: out,
+      body: hasBody ? req.body : undefined,
+      duplex: "half",
+      redirect: "manual",
     });
-
   } catch (err) {
     console.error("relay error:", err);
-    res.status(502).send("Bad Gateway: " + err.message);
+    return new Response("Bad Gateway: Tunnel Failed", { status: 502 });
   }
 }
